@@ -1,0 +1,87 @@
+my_quant/                        # 🏭 项目根目录：你的量化工具箱工厂
+│
+├── config/                      # ⚙️ 全局配置中心
+│   └── settings.yaml            # 所有可变参数（品种、时间、路径、模型参数等）
+│
+├── data/                        # 📦 板块1：数据获取与处理（把原始数据变成干净数据）
+│   ├── __init__.py
+│   ├── fetcher/                 #   📥 数据获取：从外部源抓取行情
+│   │   └── yahoo_fetcher.py     #     示例：通过 yfinance 下载数据
+│   ├── storage/                 #   💾 数据存储：把数据存到本地，方便复用
+│   │   └── local_storage.py     #     支持 Parquet/CSV 读写
+│   ├── cleaner/                 #   🧹 数据清洗：处理缺失值、异常价格、复权等
+│   │   └── basic_cleaner.py     #     基于规则的清洗逻辑
+│   └── pipeline.py              #   🔗 数据流水线：把上面三步串成一个函数
+│
+├── ai/                          # 🧠 辅助AI模型仓库（每个小AI只做一件事，可插拔）
+│   ├── __init__.py
+│   ├── data_quality/            #   🔍 数据质量AI：自动发现脏数据
+│   │   ├── anomaly_detector.py  #     异常行情检测（如 Isolation Forest）
+│   │   └── noise_filter.py      #     数据去噪（如小波变换）
+│   ├── feature_aids/            #   🎯 特征工程AI：帮你筛选有效特征
+│   │   ├── importance_ranker.py #     特征重要性排序（防过拟合）
+│   │   └── feature_selector.py  #     自动化特征选择模型
+│   ├── market_analyzers/        #   📈 市场分析AI：理解当前市场环境
+│   │   ├── regime_classifier.py #     市场状态分类（趋势/震荡/高波动）
+│   │   ├── volatility_predictor.py #  波动率预测
+│   │   └── correlation_monitor.py  #  品种相关性变化检测
+│   ├── risk_estimators/         #   ⚠️ 风险评估AI：提前预警危险
+│   │   ├── drawdown_predictor.py   #  最大回撤预估
+│   │   └── tail_risk_model.py   #     尾部风险度量
+│   └── utils/                   #   🛠 AI工具箱：所有模型的公共组件
+│       ├── base_model.py        #     模型基类（统一 fit/predict/save/load）
+│       └── model_registry.py    #     模型注册与版本管理
+│
+├── strategy/                    # 🎯 板块2：策略与核心交易信号
+│   ├── __init__.py
+│   ├── features/                #   🧬 特征工程：把行情数据变成因子
+│   │   └── feature_builder.py   #     技术指标计算（RSI、MACD等）
+│   ├── models/                  #   🧠 核心信号模型：存放训练好的模型文件
+│   │   ├── lgb_model.pkl        #     示例：LightGBM 模型
+│   │   └── train.py             #     模型训练脚本
+│   └── signals/                 #   🚦 信号生成：把模型输出转成买卖指令
+│       └── signal_generator.py  #     概率校准、信号离散化
+│
+├── backtest/                    # ⏪ 板块3：回测系统（让策略在历史中模拟运行）
+│   ├── __init__.py
+│   ├── engine/                  #   ⚙️ 回测引擎：模拟交易的核心循环
+│   │   ├── backtest_engine.py   #     事件驱动或向量化回测主逻辑
+│   │   └── broker_sim.py        #     模拟券商（撮合、滑点、手续费）
+│   ├── paper_trade/             #   📝 模拟交易：用实时行情虚拟下单
+│   │   └── paper_broker.py      #     连接行情但不真金白银交易
+│   ├── analytics/               #   📊 绩效分析：计算收益与风险指标
+│   │   └── performance.py       #     Sharpe、MaxDD、Calmar 等并画图
+│   └── validation/              #   🔬 回测验证：防止过拟合的统计检验
+│       └── cross_validation.py  #     Walk-Forward、Purged CV、Deflated Sharpe
+│
+├── risk/                        # 🛡️ 板块4：风控与合规（守住底线）
+│   ├── __init__.py
+│   ├── pre_trade/               #   🚧 事前风控：下单前安检
+│   │   └── pre_trade_check.py   #     仓位限制、资金检查、最大下单量
+│   ├── live_monitor/            #   📡 事中监控：实时风险仪表盘
+│   │   └── risk_monitor.py      #     回撤监控、异常交易报警
+│   └── post_trade/              #   📋 事后风控：盘后报告与归因
+│       └── post_trade_report.py #     每日风险敞口、压力测试
+│
+├── execution/                   # 📨 板块5：实盘执行（信号 → 真实订单）
+│   ├── __init__.py
+│   ├── signal_to_order/         #   🔄 信号转订单：把目标仓位拆成具体订单
+│   │   └── order_generator.py   #     TWAP、VWAP 等拆分算法
+│   ├── oms/                     #   📋 订单管理系统：管理订单生命周期
+│   │   ├── order_manager.py     #     创建、跟踪、撤销订单
+│   │   └── exchange_adapter.py  #     连接真实交易所的接口（模拟/实盘）
+│   └── reconcile/               #   ✅ 对账模块：确保本地与交易所一致
+│       └── reconciliation.py    #     成交回报核对、持仓同步
+│
+├── ops/                         # 🔧 板块6：运维与持续维护
+│   ├── __init__.py
+│   ├── monitor/                 #   ❤️ 系统监控：确保程序健康运行
+│   │   └── heartbeat.py         #     进程守护、数据延迟检测、报警
+│   ├── model_update/            #   🔄 模型维护：定期重训练与更新
+│   │   └── scheduler.py         #     定时触发训练，A/B测试切换
+│   └── data_backup/             #   💿 数据备份：定期归档与校验
+│       └── backup.py            #     数据库备份、完整性检查
+│
+├── main.py                      # 🚀 总入口：根据配置启动回测/模拟/实盘
+├── requirements.txt             # 📄 依赖清单：pip install -r requirements.txt
+└── README.md                    # 📖 项目说明：架构图、快速开始、模块介绍

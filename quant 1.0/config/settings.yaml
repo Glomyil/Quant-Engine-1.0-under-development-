@@ -1,0 +1,51 @@
+# config/settings.yaml
+# 全局配置文件 —— 所有可变参数都在这里修改
+
+# ---------- 1. 数据相关 ----------
+data:
+  symbol: "AAPL"              # 交易标的
+  start_date: "2022-01-01"    # 数据起始日
+  end_date: "2024-01-01"      # 数据结束日
+  interval: "1d"              # K线周期 (1m, 5m, 1h, 1d, ...)
+  data_dir: "./data_cache"    # 本地存储路径
+  #特殊数据类型开关
+  fetch_industry: false       # 行业分类，第一版可不开
+  fetch_earnings_dates: false # 财报发布日期，第二版开
+  fetch_news: false           # 新闻，第三版开
+  fetch_sentiment: false      # 社交媒体情绪，第四版开
+
+# ---------- 2. 策略与模型 ----------
+strategy:
+  model_path: "strategy/models/lgb_model.pkl"  # 训练好的模型文件
+  feature_list:               # 使用的特征列（后期可扩展）
+    - "returns_5d"
+    - "rsi_14"
+    - "volume_ratio"
+
+# ---------- 3. 回测相关 ----------
+backtest:
+  initial_capital: 100000     # 初始资金
+  commission: 0.0001          # 手续费率
+  slippage: 0.001             # 滑点比例
+  benchmark: "SPY"            # 比较基准（可选）
+
+# ---------- 4. 风控相关 ----------
+risk:
+  max_position_pct: 0.2       # 单品种最大仓位比例
+  max_drawdown_limit: 0.3     # 最大回撤硬止损（实盘有效）
+  max_order_value: 50000      # 单笔订单最大金额
+
+# ---------- 5. 实盘执行 ----------
+execution:
+  exchange: "paper"           # paper / live
+  order_type: "twap"          # 拆单算法
+  twap_duration_min: 10       # TWAP 执行时长（分钟）
+
+# ---------- 6. 运维 ----------
+ops:
+  log_level: "INFO"           # DEBUG / INFO / WARNING / ERROR
+  retrain_frequency: "weekly" # 模型重训频率
+  enable_heartbeat: true      # 是否启用心跳检测
+
+# ---------- 7. 运行模式 ----------
+mode: "backtest"              # backtest / paper / live （也可用命令行覆盖）
