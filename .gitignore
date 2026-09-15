@@ -1,0 +1,36 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ---- 虚拟环境 ----
+.venv/
+venv/
+env/
+
+# ---- IDE / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 数据与运行产物（本项目最大头：约 522 MB）----
+# 数据可再生成，不进版本库；仓库只放代码与文档
+data/storage/
+data/logs/
+*.parquet
+*.jsonl
+*.parquet.tmp
+*.tmp
+
+# ---- 本地私有配置（将来若有）----
+.env
+*.local.yml
+
+# ---- AI 工具目录 ----
+.claude/

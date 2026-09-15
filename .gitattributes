@@ -1,0 +1,8 @@
+# 统一换行符：让 Git 自动处理跨平台差异（避免满屏 CRLF 警告）
+* text=auto
+
+# 二进制文件（别做文本处理）
+*.parquet binary
+*.png binary
+*.jpg binary
+*.xlsx binary
