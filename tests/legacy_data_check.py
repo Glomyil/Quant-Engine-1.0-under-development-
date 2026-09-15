@@ -3,11 +3,11 @@ ETF 数据测试工具
 ===============
 验证本地 Parquet 数据是否完整、格式是否正确。
 用法:
-  python "data-test（测试股票数据是否正常）.py"                  # 列出本地 ETF，挑第一只全面测试
-  python "data-test（测试股票数据是否正常）.py" sh510050          # 测试指定 ETF 日线
-  python "data-test（测试股票数据是否正常）.py" sh510050 60min    # 测试指定 ETF 60分钟线
-  python "data-test（测试股票数据是否正常）.py" --list            # 仅列出本地已有的 ETF
-  python "data-test（测试股票数据是否正常）.py" --all             # 扫描全部本地 ETF，报告数据质量
+  python "legacy_data_check.py"                  # 列出本地 ETF，挑第一只全面测试
+  python "legacy_data_check.py" sh510050          # 测试指定 ETF 日线
+  python "legacy_data_check.py" sh510050 60min    # 测试指定 ETF 60分钟线
+  python "legacy_data_check.py" --list            # 仅列出本地已有的 ETF
+  python "legacy_data_check.py" --all             # 扫描全部本地 ETF，报告数据质量
 """
 
 from __future__ import annotations
@@ -253,8 +253,8 @@ if __name__ == "__main__":
 
 
 # 测试用命令
-  # python "F:\quant 1.0\tests\data-test（测试股票数据是否正常）.py" --list
+  # python "F:\quant 1.0\tests\legacy_data_check.py" --list
 
-  # python "F:\quant 1.0\tests\data-test（测试股票数据是否正常）.py" sh510050
+  # python "F:\quant 1.0\tests\legacy_data_check.py" sh510050
 
-  # python "F:\quant 1.0\tests\data-test（测试股票数据是否正常）.py" --all
+  # python "F:\quant 1.0\tests\legacy_data_check.py" --all
