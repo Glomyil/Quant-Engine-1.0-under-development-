@@ -58,7 +58,7 @@ def as_float(v, default=0.0):  # 此函数用于将输入的字符串或数字�
 
 
 def new_step_report(name):  # 这里输出一个步骤处理的数据的报告
-    return {"name": name, "status": "ok", "metrics": {},  # 这里是报告的具体形式
+    return {"name": name, "status": "ok", "metrics": {}, "columns_added": [],  # 这里是报告的具体形式
             "warnings": [], "errors": []}
 
 

@@ -138,6 +138,21 @@ check_eq(base.check_new_columns(before, before + ["is_suspend"]), ["is_suspend"]
          "加了未登记列 is_suspend → 提醒 ['is_suspend']")
 
 # ---------------------------------------------------------------------------
+# 报告模板契约（防 PITFALLS #9：字段漏了 / 拼错 / 类型错）
+# ---------------------------------------------------------------------------
+print("\n── 报告模板契约 ──")
+rep = base.new_step_report("x")
+check_eq(sorted(rep.keys()),
+         sorted(["name", "status", "metrics", "warnings", "errors", "columns_added"]),
+         "报告键集合 == 契约")
+check_eq(type(rep["metrics"]).__name__, "dict", "metrics 是 dict")
+check_eq(type(rep["columns_added"]).__name__, "list", "columns_added 是 list（不是 dict）")
+check_eq(rep["status"], "ok", "初始 status == ok")
+base.add_warning(rep, "契约测试告警")
+check_eq(rep["status"], "has_warnings", "add_warning 后 status == has_warnings")
+check_eq(len(rep["warnings"]), 1, "warnings 记录 1 条")
+
+# ---------------------------------------------------------------------------
 # 3. 汇总
 # ---------------------------------------------------------------------------
 print("\n" + "=" * 46)

@@ -1,20 +1,18 @@
 # 一个学生的 A 股数据管道（从零开始，边学边写）
 
 > **EN (TL;DR)** — A from-scratch daily-bar pipeline for the Chinese A-share market
-> (5,553 tickers including 337 delisted). The data layer works end-to-end; the cleaning
-> pipeline is being written stage by stage. Wrong turns, bugs and the lessons from them
-> are documented in [PITFALLS.md](PITFALLS.md).
+> (5,553 tickers including 337 delisted). The data layer and the cleaning executor work
+> end-to-end; the cleaning stages are being written one by one. Wrong turns, bugs and the
+> lessons from them are documented in [PITFALLS.md](PITFALLS.md).
 >
 > 这个仓库兼职我的开发日志 —— 所以你会看到大量"当时不懂、后来踩坑、然后想通"的记录。
 
-**进度**：数据下载 ✅ · 数据层 loader ✅ · 清洗 base ✅ · 清洗 `align` 🔴 进行中 · 因子 ⬜ · 回测 ⬜
-**最近更新（2026-09-15）**：测试目录改名 `tests/`、项目正式接入 Git，开始把每天的过程写进这个 README。
+**进度**：数据下载 ✅ · 数据层 loader ✅ · 清洗 base ✅ · **执行器 pipeline ✅** · 清洗 `align` 🔴 进行中 · 因子 ⬜ · 回测 ⬜
+**最近更新（2026-09-16）**：执行器 `pipeline.py` 落地（清单 → 叫号 → 外部记账报告）；给报告模板补了契约测试（21/21）；顺手揪出并记录了 [PITFALLS.md](PITFALLS.md) #9。
 
 ---
 
 ## 这个项目是什么
-
-<!-- TODO（你来补 1–2 句）：你的背景 + 为什么选量化/数据方向 -->
 
 我在从零搭一条 A 股（含退市）日线数据管道：**下载 → 清洗 → 因子 → 回测**。
 目标不是做出能赚钱的策略，而是把"投研平台的数据层"这件事真正做一遍 ——
@@ -27,8 +25,8 @@
 | 数据 | 5,553 只（5,216 上市 + 337 退市）· 1,160 万行 · 5,471 个 parquet 文件（**数据不入库**） |
 | 区间 | 2015-01-05 ~ 2026-09-07 |
 | 性能 | 单只股票端到端 ≈ **44 ms**；全市场清洗 ≈ **4 分钟**（实测 + 外推） |
-| 测试 | base 守卫 15/15 · base 冒烟 6/6 · loader 验收 18/18 |
-| 踩坑 | **8 条**真实翻车记录 → [PITFALLS.md](PITFALLS.md) |
+| 测试 | base 守卫 **21/21** · base 冒烟 6/6 · loader 验收 18/18 · 执行器冒烟 **9/9** |
+| 踩坑 | **9 条**真实翻车记录 → [PITFALLS.md](PITFALLS.md) |
 
 **架构一条线**（数据从哪来、到哪去）：
 
@@ -37,7 +35,7 @@ parquet 文件（本地 522 MB）
    │  ① 数据层 data/loader.py：选文件 → 读入 → 区间裁剪 → 守卫
    ▼
   df（内存里同时只有一只股票）
-   │  ② 执行器：读配置 → 按顺序把 df 递给每个清洗环节
+   │  ② 执行器 data/cleaner/pipeline.py：按清单顺序把 df 递给每个环节 + 记账（yml 接入待后续）
    ▼
  align → suspension → adjust → … → derived
    │  ③ 写回 parquet + 报告
@@ -55,23 +53,24 @@ parquet 文件（本地 522 MB）
 | 3 | 复权算法差异 | "后复权" ≠ "官方因子法"：厂商序列出现 `hfq/raw < 1`，直接弃用该源 |
 | 7 | 架构文档漏掉数据读取层 | 只写了中间的处理环节，"df 从哪来"没人定义 → 契约的第一格隐形 |
 | 8 | 假绿测试 | 测试通过 ≠ 代码正确：参数走不到被测代码行，短路掩盖了所有问题 |
+| 9 | 契约字段只写在文档里 | 架构文档说报告有 `columns_added`，代码模板却没预置 —— dict 拼错键名还不报错 |
 
-完整 8 条（含症状、根因、实验证据、教训）→ [PITFALLS.md](PITFALLS.md)
+完整 9 条（含症状、根因、实验证据、教训）→ [PITFALLS.md](PITFALLS.md)
 
 ## 我和 AI 怎么协作
 
-<!-- TODO（可补充你的具体规则） -->
-
-- AI 负责**教学文档、规格、Review**；然后我去查询文档和资料再学习一遍，紧接着业务代码我自己写（`data/loader.py`、`data/cleaner/*`）；
+- AI 负责**教学文档、规格、Review**；然后我自己再网上去查询官方文档和资料再学习一遍，紧接着业务代码就由我自己写（`data/loader.py`、`data/cleaner/*`）；
 - AI 的每个结论我都实测验证——包括边界情况，"先让它红一次"再接受；
-- 我抓到的 AI 错误也照记不误：教学片段照抄跑不起来（#6）、冒烟测试只打印不断言（#8）。
+- 我抓到的 AI 错误也照记不误：教学片段照抄跑不起来（#6）、冒烟测试只打印不断言（#8）、
+  报告字段只写在文档里而没在代码里预置（#9）。
 
 ## 怎么跑
 
 ```bash
-python "tests/test_base.py"          # base 守卫/白名单/翻译官   → 15/15
+python "tests/test_base.py"          # base 守卫/白名单/翻译官   → 21/21
 python "tests/test_base_guard.py"    # base 冒烟                 → 6/6
 python "tests/test_data_loader.py"   # 数据层 loader 验收        → 18/18
+python "tests/test_pipeline.py"      # 执行器冒烟（清单/报告）   → 9/9
 ```
 
 ## 数据说明与免责声明
@@ -87,12 +86,26 @@ python "tests/test_data_loader.py"   # 数据层 loader 验收        → 18/18
 
 <!-- 新日志加在下面这行之后（标题格式：### YYYY-MM-DD） -->
 
+### 2026-09-16
+- 写完执行器 `data/cleaner/pipeline.py`：**清单 → 逐只叫号 → 外部记账**。最有意思的一点是——
+  报告不靠环节自己汇报，而是执行器在"进环节前 / 出环节后"各拍一次快照（行数、列），再对比出来。
+  这样"谁偷偷把行数改了"就藏不住：环节可以沉默，但差值不会说谎。
+- 给报告模板补了契约测试（键集合 + 字段类型），`tests/test_base.py` 从 15/15 变成 **21/21**。
+  起因挺丢人的：我在执行器里写 `rep["columns_added"] = [...]`，回去翻 base 才发现**模板里根本没这个键**
+  —— 架构文档写了、代码没预置，而 Python 的 dict 拼错键名还不报错。
+  → 记进 [PITFALLS.md](PITFALLS.md) #9，并把它变成测试焊住。
+
+  唉，大肥鱼。。。。。。
+- 还是新增了 `tests/test_pipeline.py`（9/9）：空跑、玩具环节（证明 df 真的在流动）、
+  环节忘了 `return` 要报清晰的错、ctx 缺键当场报错。
+- 不过今天倒是第一次觉得"报告 / 契约"不是形式主义——它是唯一能在环节沉默时，发现谁干坏事的手段。
+
 ### 2026-09-15
 - 把 `quant—test/` 改名成 `tests/`，顺手同步了 14 个文件里 24 处引用。名字里带 `—` 这种东西，在终端里真的会被反复坑（引号、`&&`、路径转义）。
 - 给项目正式装上 Git：写 `.gitignore`（把 522 MB 数据挡在仓库外）、`.gitattributes`，提交了第一次。
 - 中途意识到我把**学习笔记也一起推上了公开仓**，想清楚之后决定：只公开代码 + `PITFALLS.md` + README，笔记留在本地。为此重写了 Git 历史，把笔记从所有提交里抹掉。要不然太丢人了QWQ
   → 教训：**`.gitignore` 管不了"已经提交过"的东西**，顺序必须是"先写 ignore → 再首次提交 → 最后 push"。
-- 感受：第一次觉得自己是在"像工程师那样"管理项目，而不是在文件夹里双击跑脚本。
+- 第一次觉得自己是在"像工程师那样"管理项目，而不是在文件夹里双击跑脚本。
 
 ### 2026-09-14
 - 写完 `data/loader.py`（`list_codes` / `load_one` / `iter_frames`），修掉 6 个 bug：
@@ -101,7 +114,7 @@ python "tests/test_data_loader.py"   # 数据层 loader 验收        → 18/18
 - 当天最意外的发现：我故意把冒烟测试的参数改成垃圾值（不存在的代码 + 非法日期），它居然**不报错、正常跑完**。
   查了半天才明白——函数在"文件不存在"那一步就提前 `return` 了，**解析日期的那几行根本没执行**。
   → 原来"测试通过"从来不等于"代码正确"；已记进 [PITFALLS.md](PITFALLS.md) #8。
-- 感受：这一天我才真正理解"**测试要有能力失败**"是什么意思。
+- 这一天我才真正理解"**测试要有能力失败**"是什么意思。
 
 ### 2026-09-10
 - 一直在困惑一个问题：清洗环节的 `run(df, params, ctx)` 里，`df` 到底是谁给的？
