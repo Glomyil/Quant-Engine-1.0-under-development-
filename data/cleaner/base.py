@@ -26,8 +26,9 @@ COLUMN_WHITELIST = {  # 在进行数据清洗时有时候会计算出新的指�
     "is_suspended":     "停牌环节加：停牌=1",  # 这里先定义了一部分可以添加的指标，后续还要添加的话进行修改即可
     "hfq_close":     "复权环节加:后复权收盘价",
     "low_liquidity":  "流动性环节加：流动性差=1",
-
-
+    "suspension_days": "连续停牌日期",
+    "is_resume": "复牌日",
+    "resume_after_days": "复牌日统计停牌日期长度"
 }
 
 
