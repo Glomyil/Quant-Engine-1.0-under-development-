@@ -64,7 +64,7 @@ codes = loader.list_codes()[:3]
 first_two = codes[:2]                # 第 3 只（sh.600005）是退市股，区间内无数据
 n = 0
 for code, df in loader.iter_frames(first_two, START, END):
-    out, reps = pipeline.run_one(df, {**CTX_OK, "code": code})
+    out, reps = pipeline.run_one(df, {**CTX_OK, "code": code}, steps=[])
     n += 1
     check(len(out) == len(df) and reps == [], f"{code}: 原样返回（{len(df)} 行，0 份报告）")
 check(n == 2, f"共处理 {n} 只有数据的股票")
