@@ -28,7 +28,9 @@ COLUMN_WHITELIST = {  # 在进行数据清洗时有时候会计算出新的指�
     "low_liquidity":  "流动性环节加：流动性差=1",
     "suspension_days": "连续停牌日期",
     "is_resume": "复牌日",
-    "resume_after_days": "复牌日统计停牌日期长度"
+    "resume_after_days": "复牌日统计停牌日期长度",
+    "is_price_bad": "价格加价格异常判定：价格不可用=1",
+    "is_amt_vol_bad": "价格环节加量额判定异常：量额异常=1"
 }
 
 
@@ -39,7 +41,7 @@ def check_new_columns(before_cols, after_cols):  # 这是一个进行清洗前�
     return [c for c in new if c not in COLUMN_WHITELIST]
 
 
-def read_param(params, key, default):  # 此函数用于安全读取字典内对应的值，如果没有或为空就输出默认值
+def read_param(params, key, default):  # 此函数用于安全读取字典内对应的参数，如果没有或为空就输出默认值
     return params.get(key, default)  # 输出读取的值
 
 

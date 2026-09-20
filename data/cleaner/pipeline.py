@@ -1,7 +1,7 @@
 """pipeline.py —— 执行器：把 df 按清单顺序递给每个清洗环节，并收集报告
 
-职责：读环节清单 → 逐只取 df（loader）→ 按顺序叫号 → 记录每步指标 → 汇总
-不做：任何清洗逻辑；不排序（顺序 = 清单顺序）；不读 parquet（loader 的活）
+职责：读环节清单 → 逐只取 df(loader)→ 按顺序叫号 → 记录每步指标 → 汇总
+不做：任何清洗逻辑；不排序（顺序 = 清单顺序）；不读 parquet(loader 的活)
 
 跑法：
     python -m data.cleaner.pipeline      # 手动冒烟：前 3 只、2020 区间
@@ -12,8 +12,9 @@ from data import loader
 from data.cleaner import base
 from data.cleaner import align            # 环节①（写完后在 PIPELINE 里取消注释）
 from data.cleaner import suspension
+from data.cleaner import price
 # 环节清单：顺序 = 执行顺序；元素 = (环节名, 模块)
-PIPELINE = [("align", align), ("suspension", suspension)
+PIPELINE = [("align", align), ("suspension", suspension), ("price", price)
             # ("align", align),                   # 这里填充对应的模块名称，方便后续效用
             ]
 
