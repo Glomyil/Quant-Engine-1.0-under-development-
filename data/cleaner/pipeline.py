@@ -13,8 +13,10 @@ from data.cleaner import base
 from data.cleaner import align            # 环节①（写完后在 PIPELINE 里取消注释）
 from data.cleaner import suspension
 from data.cleaner import price
+from data.cleaner import adjust
+from data.cleaner import derived
 # 环节清单：顺序 = 执行顺序；元素 = (环节名, 模块)
-PIPELINE = [("align", align), ("suspension", suspension), ("price", price)
+PIPELINE = [("align", align), ("suspension", suspension), ("price", price), ("adjust", adjust), ("derived", derived)
             # ("align", align),                   # 这里填充对应的模块名称，方便后续效用
             ]
 

@@ -30,7 +30,8 @@ COLUMN_WHITELIST = {  # 在进行数据清洗时有时候会计算出新的指�
     "is_resume": "复牌日",
     "resume_after_days": "复牌日统计停牌日期长度",
     "is_price_bad": "价格加价格异常判定：价格不可用=1",
-    "is_amt_vol_bad": "价格环节加量额判定异常：量额异常=1"
+    "is_amt_vol_bad": "价格环节加量额判定异常：量额异常=1",
+    "ret_1d_hfq": "今天相较前天复权后价格变动的百分比"
 }
 
 
