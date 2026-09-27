@@ -26,6 +26,9 @@ if str(_ROOT) not in sys.path:
 from data import loader
 from data.cleaner import pipeline
 
+# Windows 控制台默认 GBK：✅/❌/→ 这些字符会直接让脚本崩在最后一行 print
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 START, END = "2015-01-01", "2026-12-31"
 
 # 各环节 attrs 里要汇总的键：(环节, 键)
@@ -35,7 +38,8 @@ FIELDS = [
     ("suspension", "contradiction_rows"),
     ("price", "price_bad_rows"), ("price", "amt_vol_bad_rows"),
     ("price", "ohlc_violation_rows"),
-    ("adjust", "hfq_nan_rows"), ("adjust", "factor_nonpositive_rows"),
+    ("adjust", "hfq_nan_rows"), ("adjust", "hfq_open_nan_rows"),
+    ("adjust", "factor_nonpositive_rows"),
     ("derived", "ret_nan_rows"), ("derived", "ret_inf_rows"),
 ]
 

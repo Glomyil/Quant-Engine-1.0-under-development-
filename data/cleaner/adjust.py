@@ -13,8 +13,11 @@ def run(df: pd.DataFrame, params: dict, ctx: dict) -> pd.DataFrame:  # 所有模
                       errors="coerce")  # 将复权因子转换为浮点数用于计算
     # baostock数据源采用的是比例复权，所以实际上复权价格等于收盘价×复权因子
     out["hfq_close"] = pd.to_numeric(out["close"], errors="coerce")*f
+    out["hfq_open"] = pd.to_numeric(out["open"], errors="coerce")*f
+
     out.attrs["adjust"] = {  # 产生这个环节的数据报告对应["adjust"]环节
         "hfq_nan_rows": int(out["hfq_close"].isna().sum()),
+        "hfq_open_nan_rows": int(out["hfq_open"].isna().sum()),
         "factor_nonpositive_rows": int((f <= 0).sum()),
     }
 
