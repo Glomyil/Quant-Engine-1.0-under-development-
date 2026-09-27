@@ -1,14 +1,23 @@
 # 一个学生的 A 股数据管道（从零开始，边学边写）
 
 > **EN (TL;DR)** — A from-scratch daily-bar pipeline for the Chinese A-share market
-> (5,553 tickers including 337 delisted). The data layer and the cleaning executor work
-> end-to-end; the cleaning stages are being written one by one. Wrong turns, bugs and the
+> (5,471 tickers, delisted names included). The data layer, the 5-stage cleaning pipeline,
+> the backtest panel, the indicator layer and the factor registry all work end-to-end, each
+> with acceptance tests; the portfolio / engine layer is next. Wrong turns, bugs and the
 > lessons from them are documented in [PITFALLS.md](PITFALLS.md).
 >
 > 这个仓库兼职我的开发日志 —— 所以你会看到大量"当时不懂、后来踩坑、然后想通"的记录。
 
-**进度**：数据下载 ✅ · 数据层 loader ✅ · 清洗 base ✅ · 执行器 pipeline ✅ · **清洗 5 环节 `align → suspension → price → adjust → derived` ✅** · **净数据全库落盘 ✅** · backtest 面板 / 因子 / 引擎 ⬜ · 因子+回测最小闭环 ✅（`sandbox/` 实验版，毛水位）
-**最近更新（2026-09-22）**：清洗管道补完 —— `adjust`（复权，`hfq_close`）与 `derived`（日收益，`ret_1d_hfq`）落地并验收（**23/23**、**19/19**），5 环节全库跑通（**未登记列警告 0**）；清洗产物首次**全库落盘**（5,471 文件 / **652 MB** / 338 秒 / 失败 0）+ `cleaner_meta.json` 总账。复权的价值也第一次被量化：\|日收益\| > 21% 的行数 **raw 5,344 → hfq 328**。
+**进度**：数据下载 ✅ · 数据层 loader ✅ · 清洗 base ✅ · 执行器 pipeline ✅ · **清洗 5 环节 `align → suspension → price → adjust → derived` ✅** · **净数据全库落盘 ✅** · **回测 面板 ✅ / 指标 features ✅ / 因子注册表 ✅** · 组合 weights / 引擎 engine / 指标 metrics / 报告 report ⬜ · 因子+回测最小闭环 ✅（`sandbox/` 实验版，毛水位）
+**最近更新（2026-09-27）**：回测层三格落地并各自验收 —— **面板**（4 张宽表 + 可交易掩码 + 全库缓存 155.9 MB，**47/47**）、
+**指标 features**（**19/19**）、**因子注册表 factors**（6 个因子，**29/29**）。顺带抓到两个"不报错的错"：拼宽表时 `astype(bool)` 把缺失格判成**可交易**
+（每天虚增约 1,400 只，PITFALLS #16）、重算 `ret(1)` 与读数仓列在 **3 格**上分叉（#17）；另有一条口径陷阱：宽表 `ffill` 会给**退市股**造出 **228,620 格**假的 0 收益。
+
+<details><summary>上一版（2026-09-22）</summary>
+
+清洗管道补完 —— `adjust`（复权，`hfq_close`）与 `derived`（日收益，`ret_1d_hfq`）落地并验收（**23/23**、**19/19**），5 环节全库跑通（**未登记列警告 0**）；清洗产物首次**全库落盘**（5,471 文件 / **652 MB** / 338 秒 / 失败 0）+ `cleaner_meta.json` 总账。复权的价值也第一次被量化：\|日收益\| > 21% 的行数 **raw 5,344 → hfq 328**。
+
+</details>
 
 ### ★ 2026-09-21　认知重构：从「造一把更准的尺子」到「先拿尺子量一样东西」
 
@@ -27,6 +36,8 @@
 
 | 日期 | 当时改变了什么 |
 | :-- | :-- |
+| [2026-09-27](#2026-09-27) | "结果一样"≠"没问题"：同一个量两条路径，**等价只在今天成立**（重算 `ret(1)` 与读数仓列差 3 格） |
+| [2026-09-23](#2026-09-23) | 身份要么由内容定、要么**干脆不需要哈希**：删掉三个哈希，改成三句大白话比较 |
 | [2026-09-20](#2026-09-20) | 验收方式定型：**先写参照值，再断言**；"数字对上"比"看起来对"可靠 |
 | [2026-09-19](#2026-09-19) | **标记正确 ≠ 规划完整**；每一列都要声明"什么时候能拿到" |
 | [2026-09-18](#2026-09-18) | 同一个检查换个口径，误报差 **70 倍**；开始"给数据立契约" |
@@ -120,8 +131,12 @@ parquet 文件（本地 522 MB）
 | 11 | 新列含未来信息 | 停牌「段总长」在段第 1 天就已知 —— 聚合量当特征落列 = 提前看未来 |
 | 12 | **只规划了标记，没规划异常冲击** | 停牌环节从头到尾没出现「复牌」二字 —— 复牌日 +488% 能把 20 日波动率从 1.7% 打到 109% |
 | 13 | **未请求的重构** | 我让 AI 改「派生掩码」的命名，它顺手把「原始字段」的短名也改长了 —— 逻辑没变，代码反而更冗杂 |
+| 14 | 缓存用「规模」当身份 | `len(codes)` 让两个成分不同的集合撞同一份缓存 —— 误命中与静默覆盖都不报错 |
+| 15 | 装配层重算已有列 | panel 又乘了一遍 `close × factor`，而 `cleaner_daily` 里已有 `adjust` 的 `hfq_close` → 复权口径出现第二个家 |
+| 16 | **拼宽表把缺失格判成「可交易」** | bool 列进 `concat` 升成 object，`astype(bool)` 把 NaN 变 True → 未上市/退市的日子被当成可交易（每天虚增约 1,400 只） |
+| 17 | **同一个量两条路径** | 重算 `ret(1)` 与面板 `ret_1d_hfq`"看着一样"，实测差 3 格（长表里价缺失的停牌行）—— 等价只在今天成立 |
 
-完整 13 条（含症状、根因、实验证据、教训）→ [PITFALLS.md](PITFALLS.md)
+完整 17 条（含症状、根因、实验证据、教训）→ [PITFALLS.md](PITFALLS.md)
 
 ## 我和 AI 怎么协作
 
@@ -159,6 +174,33 @@ python -m ops.health_check           # 全库数据体检（21 项，33 秒）
 ## 开发日志（倒序，最新在上）
 
 <!-- 新日志加在下面这行之后（标题格式：### YYYY-MM-DD） -->
+
+### 2026-09-27
+- **回测层第 2、3 格落地**：`backtest/features.py`（指标算法唯一的家）验收 **19/19**；`backtest/factors.py`（因子注册表：rev_5d / rev_20d / mom_120d / vol_20d / ma_dev_20d / amihud_20d）验收 **29/29**。
+  设计目标兑现了：**加一个因子 = 加一行**（换窗口只改 `needs` 里的数字，代码一行不动）。
+- **验收拆成两半**（配合"一次只写一个文件"的节奏）：`test_factors.py` 只看注册表（写完就能跑）；`test_assemble.py` 看装配行为（等 `assemble.py`）。
+- **卡在哪（三个都是"不报错的错"）**：
+  ① `ret()` 忘了 `return` → 返回 `None`，错误在冒烟块第 49 行才炸（`NoneType has no attribute shape`）；
+  ② `amihud` 拼成 `ami_hud`、`.abs()` 写成 `.ads()` → 冒烟块只调 3 个指标、验收也不碰它（它 `requires: ["amount"]` 会被跳过）→ 这两个错本来会**一直藏到阶段 3**；
+  ③ 空注册表会让测试所有循环空转、输出"**0/0 全部通过**" —— 又是一种假绿，补了「注册表非空」守卫。
+- **新学到什么**：
+  ① **退市股的"假 0 收益"**：宽表 `ffill()` 会把退市股最后一价一直往后填 → 现算 `pct_change` 在退市后造出 **228,620 格**假的 0 收益（会被因子排进"最稳的一档"）；
+     而面板的 `ret_1d_hfq` 按每只股票自己的行算，没有这个假象 → 所以 `ret` / `ma_dev` 用 `listed()` 切"在册区间"，`vol` 直接读 `ret_1d_hfq`（顺带更快：536 ms vs 583 ms）；
+  ② **"结果一样"≠"同一个家"**：`ret(1)` 与面板 `ret_1d_hfq` 本来以为"逐格相等"，实测差 **3 格**（长表里价缺失的停牌行：面板 0.0 / 宽表重算 NaN）——
+     同一个量两条路径，**等价只在今天成立**；`ret(1)` 改成直接读列后 206 ms → **7 ms** 且 bit 级相同（PITFALLS #17）；
+  ③ 因子灵感先记进 `因子灵感.txt`（模板 + 第一个灵感 `amt_dump_risk`）：它要面板第 5 张表 `amount` → 先挂着，等真要落地再加。
+- 下一步：`assemble.py`（按 `needs` 并集现算 + 会话缓存 + `requires` 跳过 + 相关性小表）→ 然后进组合 / 引擎 / 指标 / 报告。
+
+### 2026-09-23
+- **回测层第 1 格落地**：`backtest/panel.py` —— 净数据长表 → 4 张宽表（`hfq_close` / `hfq_open` / `ret_1d_hfq` / `can_trade`）+ 全库缓存 **155.9 MB**
+  （读回 1–4 秒 vs 现装配 26–60 秒）；验收 `test_panel.py` **47/47**，并和一条**独立路径**（`ops/panel_probe.py`，不 import panel.py）逐格对账。
+- **缓存设计砍掉了全部哈希**：文件名不再带哈希（那正是"旧文件家族"的来源），身份改成三句大白话 —— **环节清单 + 源指纹 + 缓存比 `panel.py` 新**，重建同名覆盖。
+  （原方案拿 `len(codes)` 当身份：两个数量相同、成分不同的集合会撞同一份缓存，且误命中与静默覆盖都不报错 → PITFALLS #14）
+- **抓到一个真实的大 bug（掩码）**：`can_trade` 用 `concat(...).astype(bool)` —— bool 列一进 `concat` 会升成 `object`（要装 NaN），`astype(bool)` 把 **NaN 变成 True**，
+  于是未上市 / 已退市的日子被当成"可交易"：每天虚增约 **1,400 只**（中位 4,045 → 5,449；2015-07-09 千股停牌那天 1,341 → 4,028）。改成 `.eq(True)` 后参照值才正确（PITFALLS #16）。
+  **这个 bug 是我的参考实现和全库探针一起犯的** —— 是 fixture 里那条语义断言（"这只票那天还没上市，所以必须是 False"）把它抓出来的。
+- **新学到什么**：**聚合统计量抓不住口径错** —— 5,449 和 4,045 两个中位数"看着都像回事"，只有手工 fixture 的语义断言能把它们分开。
+- 另外：净数据全库重跑落盘 **20 列**（含 `hfq_open`，727 MB / 失败 0），数据契约升 v0.2。
 
 ### 2026-09-22
 - **写完复权（adjust）与日收益（derived），5 个环节的管道打通**：`align → suspension → price → adjust → derived`，
