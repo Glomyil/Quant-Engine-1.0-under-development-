@@ -2,18 +2,26 @@
 
 > **EN (TL;DR)** — A from-scratch daily-bar pipeline for the Chinese A-share market
 > (5,471 tickers, delisted names included). The data layer, the 5-stage cleaning pipeline,
-> the backtest panel, the indicator layer and the factor registry all work end-to-end, each
+> the backtest panel, the indicator, factor and assembly layers all work end-to-end, each
 > with acceptance tests; the portfolio / engine layer is next. Wrong turns, bugs and the
 > lessons from them are documented in [PITFALLS.md](PITFALLS.md).
 >
 > 这个仓库兼职我的开发日志 —— 所以你会看到大量"当时不懂、后来踩坑、然后想通"的记录。
 
-**进度**：数据下载 ✅ · 数据层 loader ✅ · 清洗 base ✅ · 执行器 pipeline ✅ · **清洗 5 环节 `align → suspension → price → adjust → derived` ✅** · **净数据全库落盘 ✅** · **回测 面板 ✅ / 指标 features ✅ / 因子注册表 ✅** · 组合 weights / 引擎 engine / 指标 metrics / 报告 report ⬜ · 因子+回测最小闭环 ✅（`sandbox/` 实验版，毛水位）
-**最近更新（2026-09-27）**：回测层三格落地并各自验收 —— **面板**（4 张宽表 + 可交易掩码 + 全库缓存 155.9 MB，**47/47**）、
+**进度**：数据下载 ✅ · 数据层 loader ✅ · 清洗 base ✅ · 执行器 pipeline ✅ · **清洗 5 环节 `align → suspension → price → adjust → derived` ✅** · **净数据全库落盘 ✅** · **回测 面板 ✅ / 指标 features ✅ / 因子注册表 ✅ / 装配 assemble ✅** · 组合 weights / 引擎 engine / 指标 metrics / 报告 report ⬜ · 因子+回测最小闭环 ✅（`sandbox/` 实验版，毛水位）
+**最近更新（2026-09-28）**：回测层第 4 格 **装配 assemble** 落地 —— 按 `needs` 并集现算 + 会话缓存 + `requires` 缺表则跳过并打印原因 + 相关性小表，验收 **10/10**
+（全库 6 个因子声明 → **5 张**指标表，2.32 s）。相关性小表抓到一个"不报错的错"：**某天缺一个因子，矩阵一平均就让那一行/列整行变 NaN** ——
+手工把 `mom_120d` 压掉一天，naive 版 25 格里 **9 格 NaN**、守卫版 **0 格**（PITFALLS #18）。实测相关性：`rev_20d`×`ma_dev_20d` **0.79**、`rev_5d`×`ma_dev_20d` 0.71 —— |ρ|>0.7 就该当同一个因子。
+
+<details><summary>上一版（2026-09-27）</summary>
+
+回测层三格落地并各自验收 —— **面板**（4 张宽表 + 可交易掩码 + 全库缓存 155.9 MB，**47/47**）、
 **指标 features**（**19/19**）、**因子注册表 factors**（6 个因子，**29/29**）。顺带抓到两个"不报错的错"：拼宽表时 `astype(bool)` 把缺失格判成**可交易**
 （每天虚增约 1,400 只，PITFALLS #16）、重算 `ret(1)` 与读数仓列在 **3 格**上分叉（#17）；另有一条口径陷阱：宽表 `ffill` 会给**退市股**造出 **228,620 格**假的 0 收益。
 
-<details><summary>上一版（2026-09-22）</summary>
+</details>
+
+<details><summary>更早（2026-09-22）</summary>
 
 清洗管道补完 —— `adjust`（复权，`hfq_close`）与 `derived`（日收益，`ret_1d_hfq`）落地并验收（**23/23**、**19/19**），5 环节全库跑通（**未登记列警告 0**）；清洗产物首次**全库落盘**（5,471 文件 / **652 MB** / 338 秒 / 失败 0）+ `cleaner_meta.json` 总账。复权的价值也第一次被量化：\|日收益\| > 21% 的行数 **raw 5,344 → hfq 328**。
 
@@ -36,6 +44,7 @@
 
 | 日期 | 当时改变了什么 |
 | :-- | :-- |
+| [2026-09-28](#2026-09-28) | **"没报错"≠"没发生"**：缺一个因子的那一天会让相关性表整行整列变 NaN —— 空转的守卫也要写，并把"真的跳过了几天"打印出来 |
 | [2026-09-27](#2026-09-27) | "结果一样"≠"没问题"：同一个量两条路径，**等价只在今天成立**（重算 `ret(1)` 与读数仓列差 3 格） |
 | [2026-09-23](#2026-09-23) | 身份要么由内容定、要么**干脆不需要哈希**：删掉三个哈希，改成三句大白话比较 |
 | [2026-09-20](#2026-09-20) | 验收方式定型：**先写参照值，再断言**；"数字对上"比"看起来对"可靠 |
@@ -136,7 +145,9 @@ parquet 文件（本地 522 MB）
 | 16 | **拼宽表把缺失格判成「可交易」** | bool 列进 `concat` 升成 object，`astype(bool)` 把 NaN 变 True → 未上市/退市的日子被当成可交易（每天虚增约 1,400 只） |
 | 17 | **同一个量两条路径** | 重算 `ret(1)` 与面板 `ret_1d_hfq`"看着一样"，实测差 3 格（长表里价缺失的停牌行）—— 等价只在今天成立 |
 
-完整 17 条（含症状、根因、实验证据、教训）→ [PITFALLS.md](PITFALLS.md)
+| 18 | **相关性表把"缺因子的那天"平均进去** | pandas 按并集对齐 → 那一行/列整行变 NaN，除法后是"它跟谁都不相关"的假结论，全程不报错 |
+
+完整 18 条（含症状、根因、实验证据、教训）→ [PITFALLS.md](PITFALLS.md)
 
 ## 我和 AI 怎么协作
 
@@ -174,6 +185,21 @@ python -m ops.health_check           # 全库数据体检（21 项，33 秒）
 ## 开发日志（倒序，最新在上）
 
 <!-- 新日志加在下面这行之后（标题格式：### YYYY-MM-DD） -->
+
+### 2026-09-28
+- **回测层第 4 格落地**：`backtest/assemble.py` —— 按 `needs` **并集现算** + 会话缓存（同一个指标只算一次）+ `requires` 缺表则**跳过并打印原因** + 相关性小表；验收 **10/10**。
+  全库实测：面板 (2839, 5471) 读回 **1.4 s**，6 个因子声明 → **5 张指标表**（`amihud_20d` 要的 `amount` 表面板里还没有 → 跳过，**不是 bug**），装配 **2.32 s**。
+- **新学到什么（相关性小表的两条口径，写错都不报错）**：
+  ① 相关性要**在每个调仓日算一次截面 Spearman，再对期数取平均**；把所有日期拉平算会混进时序效应 → ρ 虚高、误判"两个因子不相关"；
+  ② **某天缺一个因子 → 必须整天丢掉**：pandas 按**并集**对齐，矩阵一相加那个因子的**整行整列就变 NaN**，除法之后是一张"它跟谁都不相关"的表，**全程不报错**。
+  复现（真面板，手工把 `mom_120d` 在 2021-01-29 压到 10 只有效 < `min_names=30`）：naive 版 25 格里 **9 格 NaN / 整行整列全丢**；守卫版 **0 格 NaN** + 打印"跳过 1 个调仓日"（PITFALLS #18）。
+  而**今天真的跳过 0 天**（每个因子的每个调仓日最少 2,781 只有效）→ 这条规则现在**空转**，防的是以后加稀疏因子。
+- **实测相关性**（定向后，129 个调仓日平均）：`rev_20d`×`ma_dev_20d` **0.79**、`rev_5d`×`ma_dev_20d` **0.71** —— |ρ|>0.7 就该当同一个因子；`mom_120d` 与反转类 −0.35，`vol_20d` 跟谁都 ≤0.25。
+- **卡在哪：4 个错全是"手滑级"，但都不会自动报错** —— `import __future__ as annotations`（正确写法是 `from __future__ import annotations`）、`{}if` 这种粘在一起的句法、`names` / `name`、`feat_names` / `feat_name`。
+  共同点：**它们都不让"想验证的那条路"跑起来**，而冒烟块只打印不断言 → 看到的是"没输出"，不是"报错"。
+- 另外：写给下一格的教学参考 `weights.py教学参考.md`（因子值 → 5 层等权目标权重，2839 × 5471 → 129 行）+ 验收 `tests/test_weights.py`（13 条，已对着参考实现跑绿）就位；`weights.py` 本体我自己写。
+- 小债：`assemble.py` 第 9 行把 `FACTOR_LIST = sys.argv[1:] or list(FACTORS)` 写成了**模块级常量**（import 时就在读 argv）—— 挪进 `main()` 更干净。
+- 下一步：`backtest/weights.py` → 引擎 engine（T+1 开盘撮合 / 净值 / 换手 / 费用）→ 指标 metrics → 报告 report。
 
 ### 2026-09-27
 - **回测层第 2、3 格落地**：`backtest/features.py`（指标算法唯一的家）验收 **19/19**；`backtest/factors.py`（因子注册表：rev_5d / rev_20d / mom_120d / vol_20d / ma_dev_20d / amihud_20d）验收 **29/29**。
