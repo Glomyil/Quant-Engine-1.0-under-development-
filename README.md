@@ -8,7 +8,7 @@
 >
 > 这个仓库兼职我的开发日志 —— 所以你会看到大量"当时不懂、后来踩坑、然后想通"的记录。
 
-**进度**：数据下载 ✅ · 数据层 loader ✅ · 清洗 base ✅ · 执行器 pipeline ✅ · **清洗 5 环节 `align → suspension → price → adjust → derived` ✅** · **净数据全库落盘 ✅** · **回测 面板 ✅ / 指标 features ✅ / 因子注册表 ✅ / 装配 assemble ✅ / 组合 weights ✅** · 引擎 engine / 指标 metrics / 报告 report ⬜ · 因子+回测最小闭环 ✅（`sandbox/` 实验版，毛水位）
+**进度**：数据下载 ✅ · 数据层 loader ✅ · 清洗 base ✅ · 执行器 pipeline ✅ · **清洗 5 环节 `align → suspension → price → adjust → derived` ✅** · **净数据全库落盘 ✅** · **回测 面板 ✅ / 指标 features ✅ / 因子注册表 ✅ / 装配 assemble ✅ / 组合 weights ✅** · **引擎 engine 🚧（骨架进行中）** / 指标 metrics / 报告 report ⬜ · 因子+回测最小闭环 ✅（`sandbox/` 实验版，毛水位）
 **最近更新（2026-09-29）**：回测层第 5 格 **组合 weights** 落地 —— 因子值 → **5 层等权目标权重**（名次等分 + 层内 `1/只数`），验收 **13/13**；
 全库 129 个调仓日、各层 **831·830·830·830·830**、层内权重和恒 **1.0000**、未入层 **24.11%**，`build_target_weights` 本体 **0.97 s**。
 独立性质对账（129 天 × 6 类，只看输出性质）全通过，并回归了教学参考另一条路径的 2021-01-29 数字。
@@ -154,9 +154,7 @@ parquet 文件（本地 522 MB）
 | 15 | 装配层重算已有列 | panel 又乘了一遍 `close × factor`，而 `cleaner_daily` 里已有 `adjust` 的 `hfq_close` → 复权口径出现第二个家 |
 | 16 | **拼宽表把缺失格判成「可交易」** | bool 列进 `concat` 升成 object，`astype(bool)` 把 NaN 变 True → 未上市/退市的日子被当成可交易（每天虚增约 1,400 只） |
 | 17 | **同一个量两条路径** | 重算 `ret(1)` 与面板 `ret_1d_hfq`"看着一样"，实测差 3 格（长表里价缺失的停牌行）—— 等价只在今天成立 |
-
 | 18 | **相关性表把"缺因子的那天"平均进去** | pandas 按并集对齐 → 那一行/列整行变 NaN，除法后是"它跟谁都不相关"的假结论，全程不报错 |
-
 | 19 | **外壳函数的默认参数藏着口径** | 不传 `rdates` → **141** 行、传 2016 起 → **129** 行：两条路都不报错，13/13 验收也打不到（测试只打核心函数） |
 
 完整 19 条（含症状、根因、实验证据、教训）→ [PITFALLS.md](PITFALLS.md)
@@ -183,6 +181,23 @@ python "tests/test_align.py"         # align 整备验收            → 23/23
 python "tests/test_suspension.py"    # suspension 停牌验收（状态机四要素）→ 40/40
 python "tests/test_suspension.py" --full   # 追加全库对账        → 42/42
 python -m ops.health_check           # 全库数据体检（21 项，33 秒）
+
+# —— 回测层：每格一条验收（写一格、跑一格）——
+python tests/test_panel.py           # 面板 4 张宽表 + 可交易掩码      → 47/47
+python tests/test_features.py        # 指标算法（口径唯一的家）      → 19/19
+python tests/test_factors.py         # 因子注册表                  → 29/29
+python tests/test_assemble.py        # 按需装配 + 会话缓存 + 相关性   → 10/10
+python tests/test_weights.py         # 分层目标权重（名次→层→等权）   → 13/13
+python tests/test_engine.py          # 撮合 / 现金 / 净值 / 换手 / 费用 / 滑点 → 31/31（engine.py 骨架进行中）
+
+# —— 各格冒烟（真面板）——
+python -m backtest.assemble          # 指标表 + 相关性小表
+python -m backtest.weights           # 5 层只数 / 权重和 / 未入层占比
+python -m backtest.engine            # 5 层净值 / 年化 / 回撤 / 换手 / 费用（等 engine.py 写完）
+
+# —— 端到端追踪：把一条数据从长表追到引擎输入，每格"手算 vs 代码"逐格对账 ——
+python ops/trace_run.py                              # 默认 sh.600579 / 2021-01-29 / rev_20d
+python ops/trace_run.py sz.000155 2021-01-29 rev_5d   # 换股票 / 换调仓日 / 换因子
 ```
 
 ## 数据说明与免责声明
@@ -213,6 +228,15 @@ python -m ops.health_check           # 全库数据体检（21 项，33 秒）
   修法：`rdates` 改成**必传**（1 行改动）+ docstring 写清"研究区间是研究口径，不住在这个函数里" → 不传就 `TypeError` **快速失败**。
 - 另外：`import __future__ as annotations` 那行也改成了正确的 `from __future__ import annotations`（前者只是把模块绑了个名字，**并没有**启用 PEP 563，属于"以为开了其实没开"）。
 - 下一步：`engine.py`（T+1 开盘撮合 / 买不到怎么办 / 份额 → 股数 / 换手 `0.5×Σ|Δw|` / 费用与净值）→ metrics → report。
+- **回测层第 6 格 engine 开工**（MVP 第一阶段，`backtest/engine.py` 骨架 **39 行**）：
+  已写：**建账**（2 个状态 + 6 本账）→ 调仓日翻译成执行日（`get_indexer` 取坐标、坐标 +1，带两条边界保护：找不到 = −1、末位没有下一格）→ 逐日循环开头（目标权重 / 可成交掩码 / 成交价 / 成交前估值价 / 成交前净值 / 目标股数）。
+  还缺：股数差 → 买卖额（含滑点）→ 费用 → 现金与持股更新 → 成交/换手/费用记录 → **每天的收盘估值** → 返回账本 → `run_all_layers` / `nav_frame` / `main`。
+- **卡在哪（三处都是"报错很晚"或"不报错"的）**：
+  ① `shares` 的 index 我一开始写成了**交易日**、初值写成 NaN —— 它必须是**代码**（5471 个）+ 初值 0（否则和价格数组长度不一致，NaN 还会一路传染）；
+  ② 换手/费用/成交这几本账我原本按**全部交易日**建表 —— 它们只在**执行日**发生（128 行），粒度错了验收直接不过；
+  ③ `px_val`（估值价宽表）忘了 `[cols]` 对齐 —— 不致命，但破坏"先对齐、再进 numpy"的纪律。
+- **还欠三处运行时错（已定位到行）**：`px_open.loc[dt].to_numpy` **漏括号**（把"方法对象"传给了 `np.where`）；`fillna` 写在 `.to_numpy()` **之后**（numpy 数组没有 `fillna` —— 顺序必须是"先按标签补齐、再转数组"）；`np.nan_to_num(exec_px)` 默认把 NaN 补 **0** → 除零告警（应写 `nan=1.0`，只作占位）。
+- **今天想通的一句话**：**成交价 `exec_px`（缺了就是不成交，绝不填充）和成交前估值价 `val_px`（缺了必须兜底）是两个量** —— 混用就是"在昨天的价上成交"（凭空成交）；而"不可成交 = 保持原股数"（不是 0）是本格最容易犯的错。
 
 ### 2026-09-28
 - **回测层第 4 格落地**：`backtest/assemble.py` —— 按 `needs` **并集现算** + 会话缓存（同一个指标只算一次）+ `requires` 缺表则**跳过并打印原因** + 相关性小表；验收 **10/10**。
